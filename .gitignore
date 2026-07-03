@@ -1,0 +1,11 @@
+# Never publish financial data or local backups to the public repo
+*.xlsx
+*.xls
+*.csv
+
+# Local backup of the live Google Sheet
+Steve_Horizon_26_PNL.xlsx
+
+# Editor / OS cruft
+.DS_Store
+Thumbs.db

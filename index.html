@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1a1a2e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="PNL Builder">
+  <title>PNL Builder — Horizon</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" href="icons/favicon-64.png">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!-- Setup banner (shown until the Web App URL is configured) -->
+  <div id="setupBanner" class="setup-banner" hidden>
+    ⚙️ Not connected yet — tap to enter your Apps Script URL.
+  </div>
+
+  <header class="app-header">
+    <h1>PNL Builder</h1>
+    <div class="header-right">
+      <span id="connDot" class="conn-dot" title="connection"></span>
+      <button id="settingsBtn" class="icon-btn" aria-label="Settings">⚙️</button>
+    </div>
+  </header>
+
+  <main id="main">
+
+    <!-- ============ ADD ENTRY ============ -->
+    <section id="screen-add" class="screen active">
+      <div class="card">
+        <label class="field-label" for="entryDate">Date</label>
+        <input type="date" id="entryDate">
+
+        <div class="seg" role="tablist">
+          <button class="seg-btn active" data-type="expense">➖ Expense</button>
+          <button class="seg-btn" data-type="income">➕ Income</button>
+        </div>
+      </div>
+
+      <!-- Expense form -->
+      <div id="expenseForm">
+        <div class="card upload-card">
+          <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📷</div>
+            <p><strong>Tap to scan a receipt</strong></p>
+            <p class="muted small">Claude reads the vendor, amount, date &amp; category</p>
+          </div>
+          <input type="file" id="fileInput" accept="image/*" capture="environment" hidden>
+          <img id="preview" alt="Receipt preview" hidden>
+          <button class="btn btn-primary" id="scanBtn" hidden>🔍 Scan receipt</button>
+          <p class="muted small center or-line">— or fill it in manually below —</p>
+        </div>
+
+        <div class="card">
+          <label class="field-label" for="e_purchases">Purchase description</label>
+          <input type="text" id="e_purchases" placeholder="What was purchased">
+
+          <label class="field-label" for="e_cost">Cost ($)</label>
+          <input type="number" id="e_cost" inputmode="decimal" step="0.01" placeholder="0.00">
+
+          <label class="field-label" for="e_vendor">Vendor</label>
+          <input type="text" id="e_vendor" placeholder="Store / business name">
+
+          <label class="field-label" for="e_reason">Business reason</label>
+          <input type="text" id="e_reason" placeholder="Why this was a business expense">
+
+          <label class="field-label" for="e_category">Category</label>
+          <select id="e_category"><option value="">— Select category —</option></select>
+
+          <button class="btn btn-primary" id="saveExpenseBtn">💾 Save expense</button>
+        </div>
+      </div>
+
+      <!-- Income form -->
+      <div id="incomeForm" hidden>
+        <div class="card">
+          <label class="field-label" for="i_source">Source of income</label>
+          <input type="text" id="i_source" placeholder="e.g. Commission, Client name">
+
+          <label class="field-label" for="i_amount">Amount ($)</label>
+          <input type="number" id="i_amount" inputmode="decimal" step="0.01" placeholder="0.00">
+
+          <button class="btn btn-primary" id="saveIncomeBtn">💾 Save income</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ DASHBOARD ============ -->
+    <section id="screen-dashboard" class="screen">
+      <div class="card totals-card">
+        <div class="total-row income"><span>Total Income</span><strong id="d_income">—</strong></div>
+        <div class="total-row expense"><span>Total Expenses</span><strong id="d_expense">—</strong></div>
+        <hr>
+        <div class="total-row profit"><span>Profit / Loss</span><strong id="d_profit">—</strong></div>
+      </div>
+      <div class="card">
+        <div class="row-between">
+          <h2 class="section-title">Recent entries</h2>
+          <button class="btn btn-ghost small" id="refreshBtn">↻ Refresh</button>
+        </div>
+        <div id="recentList" class="entry-list"></div>
+      </div>
+      <p id="dataStamp" class="muted small center"></p>
+    </section>
+
+    <!-- ============ REPORTS ============ -->
+    <section id="screen-reports" class="screen">
+      <div class="card">
+        <h2 class="section-title">Report filters</h2>
+
+        <label class="field-label">Period</label>
+        <select id="r_period">
+          <option value="month">A month</option>
+          <option value="quarter">A quarter</option>
+          <option value="year" selected>Whole year</option>
+          <option value="range">Custom range</option>
+        </select>
+
+        <div id="r_monthWrap" class="filter-wrap" hidden>
+          <label class="field-label" for="r_month">Month</label>
+          <input type="month" id="r_month">
+        </div>
+        <div id="r_quarterWrap" class="filter-wrap" hidden>
+          <label class="field-label" for="r_quarter">Quarter</label>
+          <select id="r_quarter"><option>Q1</option><option>Q2</option><option>Q3</option><option>Q4</option></select>
+        </div>
+        <div id="r_rangeWrap" class="filter-wrap two-col" hidden>
+          <div><label class="field-label" for="r_from">From</label><input type="date" id="r_from"></div>
+          <div><label class="field-label" for="r_to">To</label><input type="date" id="r_to"></div>
+        </div>
+
+        <label class="field-label">Type</label>
+        <select id="r_type">
+          <option value="all">Income &amp; Expenses</option>
+          <option value="income">Income only</option>
+          <option value="expense">Expenses only</option>
+        </select>
+
+        <label class="field-label">Filter by</label>
+        <select id="r_dim">
+          <option value="">— No extra filter —</option>
+          <option value="category">Expense category</option>
+          <option value="vendor">Expense vendor</option>
+          <option value="source">Income source</option>
+        </select>
+        <select id="r_dimValue" hidden></select>
+
+        <button class="btn btn-primary" id="runReportBtn">📊 Run report</button>
+      </div>
+
+      <div id="reportResult" class="card" hidden>
+        <div class="totals-mini">
+          <div><span>Income</span><strong id="rep_income">$0.00</strong></div>
+          <div><span>Expenses</span><strong id="rep_expense">$0.00</strong></div>
+          <div><span>Net</span><strong id="rep_net">$0.00</strong></div>
+        </div>
+        <div class="export-row">
+          <button class="btn btn-secondary small" id="rep_csv">⬇ CSV</button>
+          <button class="btn btn-secondary small" id="rep_pdf">⬇ PDF</button>
+        </div>
+        <div id="reportRows" class="entry-list"></div>
+      </div>
+    </section>
+
+    <!-- ============ P&L ============ -->
+    <section id="screen-pnl" class="screen">
+      <div class="card">
+        <h2 class="section-title">Profit &amp; Loss</h2>
+        <label class="field-label">Period</label>
+        <select id="pnl_period">
+          <option value="year" selected>Full year</option>
+          <option value="quarter">By quarter</option>
+          <option value="range">Custom range</option>
+        </select>
+        <div id="pnl_quarterWrap" class="filter-wrap" hidden>
+          <label class="field-label" for="pnl_quarter">Quarter</label>
+          <select id="pnl_quarter"><option>Q1</option><option>Q2</option><option>Q3</option><option>Q4</option></select>
+        </div>
+        <div id="pnl_rangeWrap" class="filter-wrap two-col" hidden>
+          <div><label class="field-label" for="pnl_from">From</label><input type="date" id="pnl_from"></div>
+          <div><label class="field-label" for="pnl_to">To</label><input type="date" id="pnl_to"></div>
+        </div>
+        <button class="btn btn-primary" id="runPnlBtn">🧾 Generate P&amp;L</button>
+      </div>
+
+      <div id="pnlResult" class="card" hidden>
+        <div class="export-row">
+          <button class="btn btn-secondary small" id="pnl_csv">⬇ CSV</button>
+          <button class="btn btn-secondary small" id="pnl_pdf">⬇ PDF</button>
+        </div>
+        <div id="pnlBody"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Bottom navigation -->
+  <nav class="bottom-nav">
+    <button class="nav-btn active" data-screen="screen-add"><span>➕</span>Add</button>
+    <button class="nav-btn" data-screen="screen-dashboard"><span>📊</span>Totals</button>
+    <button class="nav-btn" data-screen="screen-reports"><span>🔎</span>Reports</button>
+    <button class="nav-btn" data-screen="screen-pnl"><span>🧾</span>P&amp;L</button>
+  </nav>
+
+  <!-- Settings modal -->
+  <div id="settingsModal" class="modal" hidden>
+    <div class="modal-inner">
+      <h2>Settings</h2>
+      <label class="field-label" for="s_url">Apps Script Web App URL</label>
+      <input type="url" id="s_url" placeholder="https://script.google.com/macros/s/…/exec">
+      <p class="muted small">Paste the <b>/exec</b> URL from your Apps Script deployment.</p>
+      <button class="btn btn-primary" id="s_save">Save &amp; test connection</button>
+      <button class="btn btn-ghost" id="s_runSetup">Run one-time sheet setup</button>
+      <button class="btn btn-ghost" id="s_close">Close</button>
+      <p id="s_status" class="muted small"></p>
+    </div>
+  </div>
+
+  <!-- Loading overlay + toast -->
+  <div id="overlay" class="overlay" hidden><div class="spinner"></div><p id="overlayMsg">Working…</p></div>
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="js/config.js"></script>
+  <script src="js/app.js" defer></script>
+</body>
+</html>
