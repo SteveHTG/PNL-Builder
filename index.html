@@ -219,6 +219,7 @@
       <p class="muted small">Paste the <b>/exec</b> URL from your Apps Script deployment.</p>
       <button class="btn btn-primary" id="s_save">Save &amp; test connection</button>
       <button class="btn btn-ghost" id="s_runSetup">Run one-time sheet setup</button>
+      <button class="btn btn-ghost" id="s_fixFormulas">Fix sheet formulas (one-time)</button>
       <button class="btn btn-ghost" id="s_close">Close</button>
       <p id="s_status" class="muted small"></p>
     </div>
@@ -242,6 +243,7 @@
         <input type="text" id="ed_reason">
         <label class="field-label" for="ed_category">Category</label>
         <select id="ed_category"></select>
+        <a id="ed_receipt" class="receipt-link" target="_blank" rel="noopener" hidden>📎 View receipt</a>
       </div>
 
       <div id="editIncomeFields" hidden>

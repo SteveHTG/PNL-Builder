@@ -79,6 +79,12 @@ select option { background: var(--card); }
 .btn-secondary { background: var(--card-2); color: #fff; border: 1px solid var(--border); }
 .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
 .btn-danger { background: transparent; color: var(--red); border: 1px solid var(--red); }
+.receipt-link {
+  display: block; margin-top: 16px; padding: 13px; text-align: center;
+  color: var(--green); text-decoration: none; font-size: 15px; font-weight: 600;
+  border: 1px solid var(--card-2); border-radius: 10px;
+}
+.receipt-link:active { background: var(--card-2); }
 .btn:disabled { opacity: .5; }
 .btn.small { padding: 10px 14px; font-size: 14px; width: auto; margin-top: 0; }
 

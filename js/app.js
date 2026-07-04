@@ -158,6 +158,15 @@ async function saveExpense() {
   if (!payload.category) return toast('Choose a category', 'err');
   if (scanImage) { payload.base64Image = scanImage.base64; payload.mimeType = scanImage.mime; }
 
+  // Duplicate guard: same date + amount + vendor as an existing entry
+  // (best effort — checks the last-loaded data, e.g. a receipt scanned twice).
+  const dup = DATA.expenses.find((x) =>
+    x.date === payload.date &&
+    Math.abs(x.cost - parseFloat(payload.cost)) < 0.005 &&
+    (x.vendor || '').trim().toLowerCase() === payload.vendor.toLowerCase());
+  if (dup && !confirm('Looks like a duplicate: ' + (dup.vendor || dup.purchases || 'an entry') +
+    ' for ' + money(dup.cost) + ' on ' + fmtDate(dup.date) + ' already exists.\n\nSave anyway?')) return;
+
   showOverlay('💾 Saving expense…');
   try {
     const r = await api('addExpense', payload);
@@ -218,7 +227,7 @@ $('refreshBtn').addEventListener('click', () => renderDashboard(true));
 let ENTRY_MAP = {};
 function combined() {
   const list = [
-    ...DATA.expenses.map((e) => ({ kind: 'expense', id: 'expense:' + e.row, row: e.row, date: e.date, title: e.purchases || e.vendor || 'Expense', sub: [e.vendor, e.category].filter(Boolean).join(' · '), amount: e.cost, category: e.category, vendor: e.vendor, reason: e.reason, purchases: e.purchases, source: '' })),
+    ...DATA.expenses.map((e) => ({ kind: 'expense', id: 'expense:' + e.row, row: e.row, date: e.date, title: e.purchases || e.vendor || 'Expense', sub: [e.vendor, e.category].filter(Boolean).join(' · '), amount: e.cost, category: e.category, vendor: e.vendor, reason: e.reason, purchases: e.purchases, receipt: e.receipt || '', source: '' })),
     ...DATA.income.map((i) => ({ kind: 'income', id: 'income:' + i.row, row: i.row, date: i.date, title: i.source || 'Income', sub: 'Income', amount: i.amount, category: '', vendor: '', reason: '', purchases: '', source: i.source }))
   ];
   ENTRY_MAP = {};
@@ -281,8 +290,14 @@ function periodLabel(period, opts) {
 }
 
 let lastReport = null;
-function runReport() {
-  if (!DATA.loadedAt && !DATA.expenses.length) { toast('Loading data…', ''); return renderDashboard(true).then(runReport); }
+// Reports always pull fresh data first so exported numbers are never stale
+// (pass fetchFresh=false to reuse just-refreshed data, e.g. after an edit).
+async function runReport(fetchFresh = true) {
+  if (fetchFresh) {
+    showOverlay('Loading latest data…');
+    try { await refreshData(); } catch (err) { toast('Offline — using last saved data.', 'err'); }
+    finally { hideOverlay(); }
+  }
   const pred = periodPredicate($('r_period').value, { month: 'r_month', quarter: 'r_quarter', from: 'r_from', to: 'r_to' });
   const type = $('r_type').value;
   const dim = $('r_dim').value, dimVal = $('r_dimValue').value;
@@ -348,8 +363,13 @@ function initPnl() {
 }
 
 let lastPnl = null;
-async function runPnl() {
-  if (!DATA.loadedAt && !DATA.expenses.length) { await renderDashboard(true); }
+// P&L also always pulls fresh data first — see runReport.
+async function runPnl(fetchFresh = true) {
+  if (fetchFresh) {
+    showOverlay('Loading latest data…');
+    try { await refreshData(); } catch (err) { toast('Offline — using last saved data.', 'err'); }
+    finally { hideOverlay(); }
+  }
   const period = $('pnl_period').value;
   const pred = periodPredicate(period === 'year' ? 'year' : period, { quarter: 'pnl_quarter', from: 'pnl_from', to: 'pnl_to' });
   const label = period === 'year' ? 'Full Year ' + todayISO().slice(0, 4)
@@ -483,6 +503,8 @@ function openEdit(id) {
     $('ed_vendor').value = e.vendor || '';
     $('ed_reason').value = e.reason || '';
     $('ed_category').value = e.category || '';
+    const rl = $('ed_receipt');
+    if (e.receipt) { rl.href = e.receipt; rl.hidden = false; } else { rl.hidden = true; }
   }
   $('editModal').hidden = false;
 }
@@ -525,8 +547,8 @@ async function deleteEdit() {
 async function afterMutation() {
   try { await refreshData(); } catch (err) { toast('Saved, but reload failed. ' + err.message, 'err'); }
   renderDashboard();
-  if (lastReport) runReport();
-  if (lastPnl) runPnl();
+  if (lastReport) runReport(false); // data already refreshed above
+  if (lastPnl) runPnl(false);
 }
 
 // ============================================================
@@ -548,6 +570,11 @@ function initSettings() {
   $('s_runSetup').addEventListener('click', async () => {
     $('s_status').textContent = 'Rebuilding Income tab…';
     try { const r = await api('setup'); $('s_status').textContent = '✅ ' + r.message; toast('Sheet setup done', 'ok'); }
+    catch (err) { $('s_status').textContent = '❌ ' + err.message; }
+  });
+  $('s_fixFormulas').addEventListener('click', async () => {
+    $('s_status').textContent = 'Repointing summary formulas…';
+    try { const r = await api('fixFormulas'); $('s_status').textContent = '✅ ' + r.message; toast('Formulas fixed', 'ok'); }
     catch (err) { $('s_status').textContent = '❌ ' + err.message; }
   });
 }

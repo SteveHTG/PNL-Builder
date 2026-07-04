@@ -70,6 +70,7 @@ function doPost(e) {
       case 'deleteEntry':   out = deleteEntry(req); break;
       case 'getData':     out = getData(req); break;
       case 'setup':       out = setupWorkbook(req); break;
+      case 'fixFormulas': out = fixFormulas(req); break;
       default: throw new Error('Unknown action: ' + action);
     }
     return json({ ok: true, data: out });
@@ -161,13 +162,16 @@ function addExpense(req) {
 
   // Columns: Purchases | Cost | Date | Vendor | Reason | Category | Quarter
   sheet.appendRow([purchases, cost, d, vendor, reason, category, quarter]);
+  var rowNum = sheet.getLastRow();
 
   var savedFile = null;
   if (req.base64Image) {
     savedFile = saveReceiptImage(req.base64Image, req.mimeType || 'image/jpeg', vendor, d);
+    // Link the receipt file to this entry (column L, past the H:K quarter helpers).
+    sheet.getRange(rowNum, 12).setValue(savedFile.url);
   }
 
-  return { quarter: quarter, savedFile: savedFile };
+  return { quarter: quarter, savedFile: savedFile ? savedFile.fileName : null };
 }
 
 function saveReceiptImage(base64Image, mimeType, vendor, dateObj) {
@@ -181,8 +185,8 @@ function saveReceiptImage(base64Image, mimeType, vendor, dateObj) {
   var safeVendor = (vendor || 'receipt').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '');
   var fileName = safeVendor + '_' + isoLocal(dateObj) + '.' + ext;
   var blob = Utilities.newBlob(Utilities.base64Decode(base64Image), mimeType, fileName);
-  folder.createFile(blob);
-  return fileName;
+  var file = folder.createFile(blob);
+  return { fileName: fileName, url: file.getUrl() };
 }
 
 // ======================= ADD INCOME =======================
@@ -209,7 +213,7 @@ function addIncome(req) {
 // ======================= GET DATA (for dashboard/reports/PNL) =======================
 function getData(req) {
   var ss = openSpreadsheet();
-  var expenses = readTable(ss.getSheetByName(EXPENSES_SHEET), 3, 7, function (r, rowNum) {
+  var expenses = readTable(ss.getSheetByName(EXPENSES_SHEET), 3, 12, function (r, rowNum) {
     if (r[1] === '' || r[1] === null) return null; // no cost -> skip empty row
     return {
       row: rowNum,
@@ -219,7 +223,8 @@ function getData(req) {
       vendor: str(r[3]),
       reason: str(r[4]),
       category: str(r[5]),
-      quarter: str(r[6])
+      quarter: str(r[6]),
+      receipt: str(r[11]) // column L: link to the saved receipt in Drive
     };
   });
 
@@ -285,11 +290,12 @@ function deleteEntry(req) {
   if (req.kind === 'income') {
     var iSheet = ss.getSheetByName(INCOME_SHEET);
     guardRow(iSheet, row, 3, req.expect);
-    deleteDataRow(iSheet, row, 4);
+    deleteDataRow(iSheet, row, 1, 4);
   } else {
     var eSheet = ss.getSheetByName(EXPENSES_SHEET);
     guardRow(eSheet, row, 2, req.expect);
-    deleteDataRow(eSheet, row, 7); // shift A:G only -> preserves H:K quarter-helper formulas
+    deleteDataRow(eSheet, row, 1, 7);   // shift A:G, skipping the H:K quarter-helper formulas
+    deleteDataRow(eSheet, row, 12, 1);  // shift the receipt-link column (L) in step with the data
   }
   return { deleted: true };
 }
@@ -304,16 +310,48 @@ function guardRow(sheet, row, amountCol, expect) {
   }
 }
 
-// Delete an entry by shifting the data columns up, leaving any helper formulas
-// in columns beyond numCols untouched.
-function deleteDataRow(sheet, row, numCols) {
+// Delete an entry by shifting a block of columns up one row, leaving any
+// helper formulas in the other columns untouched.
+function deleteDataRow(sheet, row, startCol, numCols) {
   var last = sheet.getLastRow();
   if (row > last) return;
   if (row < last) {
-    var below = sheet.getRange(row + 1, 1, last - row, numCols).getValues();
-    sheet.getRange(row, 1, last - row, numCols).setValues(below);
+    var below = sheet.getRange(row + 1, startCol, last - row, numCols).getValues();
+    sheet.getRange(row, startCol, last - row, numCols).setValues(below);
   }
-  sheet.getRange(last, 1, 1, numCols).clearContent();
+  sheet.getRange(last, startCol, 1, numCols).clearContent();
+}
+
+// ======================= ONE-TIME: fix summary formulas =======================
+// The original sheet's formulas had hardcoded ranges that stop counting around
+// row 176 (and the Expenses Total missed the last category row). This repoints
+// them to full-column ranges so they keep working forever.
+function fixFormulas(req) {
+  var ss = openSpreadsheet();
+  var fixed = [];
+
+  var pl = ss.getSheetByName(PL_SHEET);
+  if (pl) {
+    // Category rows 9-22 (14 categories): sum ALL expense rows, not just 3-176.
+    for (var r = 9; r <= 22; r++) {
+      pl.getRange(r, 3).setFormula('=SUMIF(Expenses!$F:$F,B' + r + ',Expenses!$B:$B)');
+    }
+    // Expenses Total previously summed C9:C21, silently excluding row 22 (Business Meeting).
+    pl.getRange('C8').setFormula('=SUM(C9:C22)');
+    fixed.push('PL category sums cover all rows and all 14 categories');
+  }
+
+  var ex = ss.getSheetByName(EXPENSES_SHEET);
+  if (ex) {
+    var quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
+    for (var i = 0; i < 4; i++) {
+      ex.getRange(4, 8 + i).setFormula('=SUMIF($G:$G,"' + quarters[i] + '",$B:$B)'); // H4:K4
+    }
+    ex.getRange('L2').setValue('Receipt'); // header for the receipt-link column
+    fixed.push('Quarter totals cover unlimited rows; Receipt column added');
+  }
+
+  return { message: 'Done. ' + fixed.join('. ') + '.' };
 }
 
 // ======================= ONE-TIME SETUP: rebuild Income tab =======================

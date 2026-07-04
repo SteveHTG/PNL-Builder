@@ -17,7 +17,8 @@ Built for **Steve Smith · Horizon Turnout Gear**.
 | **Add expense — scan** | Take a photo, choose an existing photo/screenshot, or upload a **PDF** of a receipt. Claude AI reads the vendor, amount, date, business reason, and category. You review, then save. |
 | **Add expense — manual** | Type an expense in directly (no photo needed). |
 | **Add income** | Record a date, source, and amount. |
-| **Edit / delete** | Tap any entry in the Totals or Reports list to change its fields or delete it — the change is written straight back to your Google Sheet. |
+| **Edit / delete** | Tap any entry in the Totals or Reports list to change its fields or delete it — the change is written straight back to your Google Sheet. Scanned expenses show a **📎 View receipt** link that opens the saved file in Drive. |
+| **Duplicate warning** | Saving an expense with the same date, amount, and vendor as an existing entry asks for confirmation first (catches double-scanned receipts). |
 | **Dashboard (Totals)** | Live totals: income, expenses, profit/loss, and your most recent entries. |
 | **Reports** | Filter by month / quarter / year / custom date range, by type (income vs expense), and by category / vendor / source. Export to **CSV** or **PDF**. |
 | **P&L** | An accountant‑ready Profit & Loss statement — income by source, expenses by category, net profit, and a 30% quarterly tax set‑aside estimate. Export to **CSV** or **PDF**. |
@@ -143,6 +144,7 @@ All are called via a single `doPost` that routes on an `action` field:
 | `deleteEntry` | Removes an entry — shifts the data columns up so the sheet's summary formulas stay intact |
 | `getData` | Returns all expenses + income (with row numbers) for the dashboard/reports/P&L |
 | `setup` | One‑time: rebuilds the Income tab into the clean table |
+| `fixFormulas` | One‑time: repoints the sheet's summary formulas to full‑column ranges (the originals stopped counting near row 176 and missed the last category) and adds the Receipt column header |
 
 ---
 
@@ -194,6 +196,7 @@ When you change the backend (`apps-script/Code.gs`):
 | "Income tab has not been rebuilt" | Run ⚙️ → **Run one-time sheet setup** once. |
 | App looks old after an update | Fully close and reopen it (twice). The service worker swaps in the new version on relaunch. |
 | Receipt saved but no image in Drive | The `Horizon/Receipts/<year>` folder must exist; manual entries (no photo) save no image by design. |
+| Old entries have no 📎 receipt link | Links are recorded from the date this feature was added; earlier receipts are still in `Horizon/Receipts/2026`, just not linked to their rows. |
 
 ---
 
