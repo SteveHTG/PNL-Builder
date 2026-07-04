@@ -1,6 +1,6 @@
 /* PNL Builder service worker — offline app shell.
    Bump CACHE_VERSION whenever you change app files so phones pick up the update. */
-const CACHE_VERSION = 'pnl-builder-v1';
+const CACHE_VERSION = 'pnl-builder-v2';
 const APP_SHELL = [
   './',
   './index.html',

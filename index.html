@@ -45,13 +45,15 @@
       <!-- Expense form -->
       <div id="expenseForm">
         <div class="card upload-card">
-          <div class="upload-area" id="uploadArea">
-            <div class="upload-icon">📷</div>
-            <p><strong>Tap to scan a receipt</strong></p>
-            <p class="muted small">Claude reads the vendor, amount, date &amp; category</p>
+          <p class="muted small center" style="margin-bottom:10px;">📷 Scan a receipt — Claude reads the vendor, amount, date &amp; category</p>
+          <div class="upload-buttons">
+            <button type="button" class="btn btn-secondary upload-choice" id="takePhotoBtn">📷 Take photo</button>
+            <button type="button" class="btn btn-secondary upload-choice" id="chooseFileBtn">🖼️ Photo / PDF</button>
           </div>
-          <input type="file" id="fileInput" accept="image/*" capture="environment" hidden>
+          <input type="file" id="cameraInput" accept="image/*" capture="environment" hidden>
+          <input type="file" id="fileInput" accept="image/*,application/pdf,.pdf" hidden>
           <img id="preview" alt="Receipt preview" hidden>
+          <div id="pdfChip" class="pdf-chip" hidden></div>
           <button class="btn btn-primary" id="scanBtn" hidden>🔍 Scan receipt</button>
           <p class="muted small center or-line">— or fill it in manually below —</p>
         </div>

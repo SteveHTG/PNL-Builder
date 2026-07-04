@@ -82,13 +82,14 @@ select option { background: var(--card); }
 .btn.small { padding: 10px 14px; font-size: 14px; width: auto; margin-top: 0; }
 
 /* ---------- upload ---------- */
-.upload-card .upload-area {
-  border: 2px dashed var(--card-2); border-radius: 12px; padding: 30px 16px;
-  text-align: center; cursor: pointer;
-}
-.upload-area:active { background: var(--card-2); }
-.upload-icon { font-size: 40px; margin-bottom: 8px; }
+.upload-buttons { display: flex; gap: 8px; }
+.upload-choice { flex: 1; margin-top: 0; padding: 16px 10px; }
 #preview { width: 100%; border-radius: 12px; margin-top: 14px; display: block; }
+.pdf-chip {
+  margin-top: 14px; padding: 16px; border-radius: 12px; text-align: center;
+  background: var(--card-2); border: 1px solid var(--border);
+  font-size: 15px; word-break: break-all;
+}
 .or-line { margin-top: 14px; }
 
 /* ---------- totals ---------- */

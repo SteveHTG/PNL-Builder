@@ -77,7 +77,7 @@ document.querySelectorAll('.nav-btn').forEach((b) => b.addEventListener('click',
 // ============================================================
 //  ADD ENTRY
 // ============================================================
-let scanImage = null; // {base64, mime}
+let scanImage = null; // {base64, mime, name}
 
 function initAdd() {
   $('entryDate').value = todayISO();
@@ -91,7 +91,9 @@ function initAdd() {
     $('expenseForm').hidden = isIncome;
   }));
 
-  $('uploadArea').addEventListener('click', () => $('fileInput').click());
+  $('takePhotoBtn').addEventListener('click', () => $('cameraInput').click());
+  $('chooseFileBtn').addEventListener('click', () => $('fileInput').click());
+  $('cameraInput').addEventListener('change', onFilePicked);
   $('fileInput').addEventListener('change', onFilePicked);
   $('scanBtn').addEventListener('click', doScan);
   $('saveExpenseBtn').addEventListener('click', saveExpense);
@@ -101,11 +103,26 @@ function initAdd() {
 function onFilePicked(e) {
   const file = e.target.files[0];
   if (!file) return;
+  const mime = file.type || (/\.pdf$/i.test(file.name) ? 'application/pdf' : 'image/jpeg');
+  // Claude limits: ~32MB PDF, ~5MB image. Warn early rather than fail server-side.
+  const maxMB = mime === 'application/pdf' ? 30 : 5;
+  if (file.size > maxMB * 1024 * 1024) {
+    return toast(`That file is ${(file.size / 1048576).toFixed(1)}MB — max ${maxMB}MB. Try a smaller scan.`, 'err');
+  }
   const reader = new FileReader();
   reader.onload = (ev) => {
     const dataUrl = ev.target.result;
-    scanImage = { base64: dataUrl.split(',')[1], mime: file.type || 'image/jpeg' };
-    const img = $('preview'); img.src = dataUrl; img.hidden = false;
+    scanImage = { base64: dataUrl.split(',')[1], mime: mime, name: file.name || 'receipt' };
+    const img = $('preview');
+    const chip = $('pdfChip');
+    if (mime === 'application/pdf') {
+      img.hidden = true; img.src = '';
+      chip.textContent = '📄 ' + scanImage.name;
+      chip.hidden = false;
+    } else {
+      chip.hidden = true;
+      img.src = dataUrl; img.hidden = false;
+    }
     $('scanBtn').hidden = false;
   };
   reader.readAsDataURL(file);
@@ -156,7 +173,9 @@ function resetExpense() {
   $('e_category').value = '';
   scanImage = null;
   $('preview').hidden = true; $('preview').src = '';
-  $('scanBtn').hidden = true; $('fileInput').value = '';
+  $('pdfChip').hidden = true; $('pdfChip').textContent = '';
+  $('scanBtn').hidden = true;
+  $('fileInput').value = ''; $('cameraInput').value = '';
 }
 
 async function saveIncome() {

@@ -90,13 +90,19 @@ function scanReceipt(req) {
   var apiKey = PropertiesService.getScriptProperties().getProperty('ANTHROPIC_API_KEY');
   if (!apiKey) throw new Error('ANTHROPIC_API_KEY Script Property is not set.');
 
+  // PDFs go in a "document" block; images (jpeg/png/gif/webp) in an "image" block.
+  // No beta header is required for PDF document input.
+  var mediaBlock = (mimeType === 'application/pdf')
+    ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64Image } }
+    : { type: 'image', source: { type: 'base64', media_type: mimeType, data: base64Image } };
+
   var payload = {
     model: CLAUDE_MODEL,
     max_tokens: 1000,
     messages: [{
       role: 'user',
       content: [
-        { type: 'image', source: { type: 'base64', media_type: mimeType, data: base64Image } },
+        mediaBlock,
         { type: 'text', text:
 'Analyze this receipt and extract the following information. Respond ONLY with a valid JSON object, no other text:\n' +
 '{\n' +
