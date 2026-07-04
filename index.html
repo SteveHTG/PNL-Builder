@@ -105,6 +105,7 @@
           <h2 class="section-title">Recent entries</h2>
           <button class="btn btn-ghost small" id="refreshBtn">↻ Refresh</button>
         </div>
+        <p class="muted small" style="margin:2px 0 4px;">Tap an entry to edit or delete it.</p>
         <div id="recentList" class="entry-list"></div>
       </div>
       <p id="dataStamp" class="muted small center"></p>
@@ -220,6 +221,40 @@
       <button class="btn btn-ghost" id="s_runSetup">Run one-time sheet setup</button>
       <button class="btn btn-ghost" id="s_close">Close</button>
       <p id="s_status" class="muted small"></p>
+    </div>
+  </div>
+
+  <!-- Edit / delete modal -->
+  <div id="editModal" class="modal" hidden>
+    <div class="modal-inner">
+      <h2 id="editTitle">Edit entry</h2>
+      <label class="field-label" for="ed_date">Date</label>
+      <input type="date" id="ed_date">
+
+      <div id="editExpenseFields">
+        <label class="field-label" for="ed_purchases">Purchase description</label>
+        <input type="text" id="ed_purchases">
+        <label class="field-label" for="ed_cost">Cost ($)</label>
+        <input type="number" id="ed_cost" inputmode="decimal" step="0.01">
+        <label class="field-label" for="ed_vendor">Vendor</label>
+        <input type="text" id="ed_vendor">
+        <label class="field-label" for="ed_reason">Business reason</label>
+        <input type="text" id="ed_reason">
+        <label class="field-label" for="ed_category">Category</label>
+        <select id="ed_category"></select>
+      </div>
+
+      <div id="editIncomeFields" hidden>
+        <label class="field-label" for="ed_source">Source of income</label>
+        <input type="text" id="ed_source">
+        <label class="field-label" for="ed_amount">Amount ($)</label>
+        <input type="number" id="ed_amount" inputmode="decimal" step="0.01">
+      </div>
+
+      <button class="btn btn-primary" id="ed_save">💾 Save changes</button>
+      <button class="btn btn-danger" id="ed_delete">🗑 Delete entry</button>
+      <button class="btn btn-ghost" id="ed_cancel">Cancel</button>
+      <p id="ed_status" class="muted small"></p>
     </div>
   </div>
 

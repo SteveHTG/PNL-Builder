@@ -215,14 +215,19 @@ async function renderDashboard(force) {
 }
 $('refreshBtn').addEventListener('click', () => renderDashboard(true));
 
+let ENTRY_MAP = {};
 function combined() {
-  return [
-    ...DATA.expenses.map((e) => ({ kind: 'expense', date: e.date, title: e.purchases || e.vendor || 'Expense', sub: [e.vendor, e.category].filter(Boolean).join(' · '), amount: e.cost, category: e.category, vendor: e.vendor, source: '' })),
-    ...DATA.income.map((i) => ({ kind: 'income', date: i.date, title: i.source || 'Income', sub: 'Income', amount: i.amount, category: '', vendor: '', source: i.source }))
+  const list = [
+    ...DATA.expenses.map((e) => ({ kind: 'expense', id: 'expense:' + e.row, row: e.row, date: e.date, title: e.purchases || e.vendor || 'Expense', sub: [e.vendor, e.category].filter(Boolean).join(' · '), amount: e.cost, category: e.category, vendor: e.vendor, reason: e.reason, purchases: e.purchases, source: '' })),
+    ...DATA.income.map((i) => ({ kind: 'income', id: 'income:' + i.row, row: i.row, date: i.date, title: i.source || 'Income', sub: 'Income', amount: i.amount, category: '', vendor: '', reason: '', purchases: '', source: i.source }))
   ];
+  ENTRY_MAP = {};
+  list.forEach((e) => { if (e.row) ENTRY_MAP[e.id] = e; });
+  return list;
 }
 function entryRow(e) {
-  return `<div class="entry"><div class="e-main"><div class="e-title">${esc(e.title)}</div>
+  const tap = e.row ? ` data-id="${esc(e.id)}"` : '';
+  return `<div class="entry"${tap}><div class="e-main"><div class="e-title">${esc(e.title)}</div>
     <div class="e-sub">${esc(fmtDate(e.date))}${e.sub ? ' · ' + esc(e.sub) : ''}</div></div>
     <div class="e-amt ${e.kind}">${e.kind === 'income' ? '+' : '−'}${money(e.amount)}</div></div>`;
 }
@@ -444,6 +449,87 @@ function printHTML(title, bodyHtml) {
 }
 
 // ============================================================
+//  EDIT / DELETE ENTRY
+// ============================================================
+let editing = null;
+function initEdit() {
+  const sel = $('ed_category');
+  sel.innerHTML = '<option value="">— Select category —</option>';
+  CATEGORIES.forEach((c) => { const o = document.createElement('option'); o.textContent = c; sel.appendChild(o); });
+  ['recentList', 'reportRows'].forEach((id) => $(id).addEventListener('click', (ev) => {
+    const el = ev.target.closest('.entry[data-id]');
+    if (el) openEdit(el.getAttribute('data-id'));
+  }));
+  $('ed_save').addEventListener('click', saveEdit);
+  $('ed_delete').addEventListener('click', deleteEdit);
+  $('ed_cancel').addEventListener('click', closeEdit);
+}
+function openEdit(id) {
+  const e = ENTRY_MAP[id];
+  if (!e) return;
+  editing = e;
+  $('ed_status').textContent = '';
+  const isIncome = e.kind === 'income';
+  $('editTitle').textContent = isIncome ? 'Edit income' : 'Edit expense';
+  $('editIncomeFields').hidden = !isIncome;
+  $('editExpenseFields').hidden = isIncome;
+  $('ed_date').value = e.date || '';
+  if (isIncome) {
+    $('ed_source').value = e.source || '';
+    $('ed_amount').value = e.amount != null ? e.amount : '';
+  } else {
+    $('ed_purchases').value = e.purchases || '';
+    $('ed_cost').value = e.amount != null ? e.amount : '';
+    $('ed_vendor').value = e.vendor || '';
+    $('ed_reason').value = e.reason || '';
+    $('ed_category').value = e.category || '';
+  }
+  $('editModal').hidden = false;
+}
+function closeEdit() { $('editModal').hidden = true; editing = null; }
+
+async function saveEdit() {
+  if (!editing) return;
+  const e = editing, date = $('ed_date').value;
+  if (!date) return toast('Pick a date', 'err');
+  let action, payload;
+  if (e.kind === 'income') {
+    const amt = $('ed_amount').value;
+    if (!amt || isNaN(parseFloat(amt))) return toast('Enter an amount', 'err');
+    action = 'updateIncome';
+    payload = { row: e.row, date: date, source: $('ed_source').value.trim(), amount: amt, expect: e.amount };
+  } else {
+    const cost = $('ed_cost').value;
+    if (!cost || isNaN(parseFloat(cost))) return toast('Enter a cost', 'err');
+    if (!$('ed_category').value) return toast('Choose a category', 'err');
+    action = 'updateExpense';
+    payload = { row: e.row, date: date, purchases: $('ed_purchases').value.trim(), cost: cost, vendor: $('ed_vendor').value.trim(), reason: $('ed_reason').value.trim(), category: $('ed_category').value, expect: e.amount };
+  }
+  showOverlay('Saving changes…');
+  try { await api(action, payload); toast('Entry updated', 'ok'); closeEdit(); await afterMutation(); }
+  catch (err) { toast(err.message, 'err'); }
+  finally { hideOverlay(); }
+}
+
+async function deleteEdit() {
+  if (!editing) return;
+  if (!confirm('Delete this entry? It removes the row from your Google Sheet.')) return;
+  const e = editing;
+  showOverlay('Deleting…');
+  try { await api('deleteEntry', { kind: e.kind, row: e.row, expect: e.amount }); toast('Entry deleted', 'ok'); closeEdit(); await afterMutation(); }
+  catch (err) { toast(err.message, 'err'); }
+  finally { hideOverlay(); }
+}
+
+// Reload from the sheet and re-render whatever the user is looking at.
+async function afterMutation() {
+  try { await refreshData(); } catch (err) { toast('Saved, but reload failed. ' + err.message, 'err'); }
+  renderDashboard();
+  if (lastReport) runReport();
+  if (lastPnl) runPnl();
+}
+
+// ============================================================
 //  SETTINGS
 // ============================================================
 function initSettings() {
@@ -475,6 +561,7 @@ function init() {
   initAdd();
   initReports();
   initPnl();
+  initEdit();
   initSettings();
   $('setupBanner').hidden = !!getUrl();
   if (getUrl()) { api('ping').then(() => setConn(true)).catch(() => setConn(false)); }

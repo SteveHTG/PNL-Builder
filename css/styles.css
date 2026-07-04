@@ -78,6 +78,7 @@ select option { background: var(--card); }
 .btn-primary { background: var(--accent); color: #fff; }
 .btn-secondary { background: var(--card-2); color: #fff; border: 1px solid var(--border); }
 .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+.btn-danger { background: transparent; color: var(--red); border: 1px solid var(--red); }
 .btn:disabled { opacity: .5; }
 .btn.small { padding: 10px 14px; font-size: 14px; width: auto; margin-top: 0; }
 
@@ -118,6 +119,8 @@ select option { background: var(--card); }
   padding: 11px 0; border-bottom: 1px solid var(--card-2);
 }
 .entry:last-child { border-bottom: none; }
+.entry[data-id] { cursor: pointer; }
+.entry[data-id]:active { background: var(--card-2); border-radius: 8px; }
 .entry .e-main { min-width: 0; }
 .entry .e-title { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .entry .e-sub { font-size: 12.5px; color: var(--muted); margin-top: 2px; }

@@ -65,6 +65,9 @@ function doPost(e) {
       case 'scanReceipt': out = scanReceipt(req); break;
       case 'addExpense':  out = addExpense(req); break;
       case 'addIncome':   out = addIncome(req); break;
+      case 'updateExpense': out = updateExpense(req); break;
+      case 'updateIncome':  out = updateIncome(req); break;
+      case 'deleteEntry':   out = deleteEntry(req); break;
       case 'getData':     out = getData(req); break;
       case 'setup':       out = setupWorkbook(req); break;
       default: throw new Error('Unknown action: ' + action);
@@ -206,34 +209,111 @@ function addIncome(req) {
 // ======================= GET DATA (for dashboard/reports/PNL) =======================
 function getData(req) {
   var ss = openSpreadsheet();
-  var expenses = readTable(ss.getSheetByName(EXPENSES_SHEET), 3, 7, function (row) {
-    if (row[1] === '' || row[1] === null) return null; // no cost -> skip empty row
+  var expenses = readTable(ss.getSheetByName(EXPENSES_SHEET), 3, 7, function (r, rowNum) {
+    if (r[1] === '' || r[1] === null) return null; // no cost -> skip empty row
     return {
-      purchases: str(row[0]),
-      cost: num(row[1]),
-      date: toIsoDate(row[2]),
-      vendor: str(row[3]),
-      reason: str(row[4]),
-      category: str(row[5]),
-      quarter: str(row[6])
+      row: rowNum,
+      purchases: str(r[0]),
+      cost: num(r[1]),
+      date: toIsoDate(r[2]),
+      vendor: str(r[3]),
+      reason: str(r[4]),
+      category: str(r[5]),
+      quarter: str(r[6])
     };
   });
 
   var incomeSheet = ss.getSheetByName(INCOME_SHEET);
   var income = [];
   if (incomeSheet && isNewIncomeLayout(incomeSheet)) {
-    income = readTable(incomeSheet, 3, 4, function (row) {
-      if ((row[2] === '' || row[2] === null) && !row[0]) return null;
+    income = readTable(incomeSheet, 3, 4, function (r, rowNum) {
+      if ((r[2] === '' || r[2] === null) && !r[0]) return null;
       return {
-        date: toIsoDate(row[0]),
-        source: str(row[1]),
-        amount: num(row[2]),
-        quarter: str(row[3])
+        row: rowNum,
+        date: toIsoDate(r[0]),
+        source: str(r[1]),
+        amount: num(r[2]),
+        quarter: str(r[3])
       };
     });
   }
 
   return { expenses: expenses, income: income, categories: CATEGORIES, year: YEAR, incomeReady: income !== null };
+}
+
+// ======================= EDIT / DELETE =======================
+function updateExpense(req) {
+  var row = parseInt(req.row, 10);
+  var cost = parseFloat(req.cost);
+  var category = String(req.category || '').trim();
+  var d = parseDate(req.date);
+  if (!(row >= 3)) throw new Error('Invalid row.');
+  if (isNaN(cost)) throw new Error('Cost is not a valid number.');
+  if (!category) throw new Error('Category is required.');
+  if (!d) throw new Error('Date is missing or invalid.');
+
+  var ss = openSpreadsheet();
+  var sheet = ss.getSheetByName(EXPENSES_SHEET);
+  guardRow(sheet, row, 2, req.expect); // column B = Cost
+  sheet.getRange(row, 1, 1, 7).setValues([[
+    String(req.purchases || '').trim(), cost, d,
+    String(req.vendor || '').trim(), String(req.reason || '').trim(),
+    category, quarterOf(d)
+  ]]);
+  return { quarter: quarterOf(d) };
+}
+
+function updateIncome(req) {
+  var row = parseInt(req.row, 10);
+  var amount = parseFloat(req.amount);
+  var d = parseDate(req.date);
+  if (!(row >= 3)) throw new Error('Invalid row.');
+  if (isNaN(amount)) throw new Error('Amount is not a valid number.');
+  if (!d) throw new Error('Date is missing or invalid.');
+
+  var ss = openSpreadsheet();
+  var sheet = ss.getSheetByName(INCOME_SHEET);
+  guardRow(sheet, row, 3, req.expect); // column C = Amount
+  sheet.getRange(row, 1, 1, 4).setValues([[d, String(req.source || '').trim(), amount, quarterOf(d)]]);
+  return { quarter: quarterOf(d) };
+}
+
+function deleteEntry(req) {
+  var row = parseInt(req.row, 10);
+  if (!(row >= 3)) throw new Error('Invalid row.');
+  var ss = openSpreadsheet();
+  if (req.kind === 'income') {
+    var iSheet = ss.getSheetByName(INCOME_SHEET);
+    guardRow(iSheet, row, 3, req.expect);
+    deleteDataRow(iSheet, row, 4);
+  } else {
+    var eSheet = ss.getSheetByName(EXPENSES_SHEET);
+    guardRow(eSheet, row, 2, req.expect);
+    deleteDataRow(eSheet, row, 7); // shift A:G only -> preserves H:K quarter-helper formulas
+  }
+  return { deleted: true };
+}
+
+// Make sure the row still holds the entry the app thinks it does (amount match)
+// before editing/deleting — protects against stale row numbers after sheet edits.
+function guardRow(sheet, row, amountCol, expect) {
+  if (expect === null || expect === undefined || expect === '') return;
+  var current = num(sheet.getRange(row, amountCol).getValue());
+  if (Math.abs(current - num(expect)) > 0.005) {
+    throw new Error('This entry changed in the sheet. Tap Refresh and try again.');
+  }
+}
+
+// Delete an entry by shifting the data columns up, leaving any helper formulas
+// in columns beyond numCols untouched.
+function deleteDataRow(sheet, row, numCols) {
+  var last = sheet.getLastRow();
+  if (row > last) return;
+  if (row < last) {
+    var below = sheet.getRange(row + 1, 1, last - row, numCols).getValues();
+    sheet.getRange(row, 1, last - row, numCols).setValues(below);
+  }
+  sheet.getRange(last, 1, 1, numCols).clearContent();
 }
 
 // ======================= ONE-TIME SETUP: rebuild Income tab =======================
@@ -308,7 +388,7 @@ function readTable(sheet, startRow, numCols, mapFn) {
   var values = sheet.getRange(startRow, 1, last - startRow + 1, numCols).getValues();
   var out = [];
   for (var i = 0; i < values.length; i++) {
-    var mapped = mapFn(values[i]);
+    var mapped = mapFn(values[i], startRow + i);
     if (mapped) out.push(mapped);
   }
   return out;
